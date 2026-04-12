@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 
@@ -12,15 +13,24 @@ declare global {
 
 function getDb(): Database.Database {
   if (!globalThis.__db) {
+    const dataDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
     globalThis.__db = new Database(DB_PATH);
     globalThis.__db.pragma('journal_mode = WAL');
     globalThis.__db.pragma('foreign_keys = ON');
+    globalThis.__db.pragma('busy_timeout = 10000');
     migrate(globalThis.__db);
   }
   return globalThis.__db;
 }
 
-export const db = getDb();
+// Lazy accessor — does NOT run at module evaluation time.
+// This prevents SQLite being opened by multiple parallel build workers.
+function db(): Database.Database {
+  return getDb();
+}
 
 function migrate(database: Database.Database) {
   database.exec(`
@@ -138,27 +148,29 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id, created_at);
   `);
 
-  // Seed admin user if none exists
-  const adminExists = database.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get();
-  if (!adminExists) {
+  // Seed admin user if none exists — use a transaction to avoid race conditions during parallel builds
+  const seed = database.transaction(() => {
+    const adminExists = database.prepare(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`).get();
+    if (adminExists) return;
+
     const adminId = nanoid();
     const hash = bcrypt.hashSync('admin123', 10);
     database.prepare(`
-      INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role)
+      INSERT OR IGNORE INTO users (id, tenant_id, email, password_hash, first_name, last_name, role)
       VALUES (?, NULL, 'admin@abfallmanager.de', ?, 'System', 'Admin', 'admin')
     `).run(adminId, hash);
 
     // Create demo tenant
     const tenantId = nanoid();
     database.prepare(`
-      INSERT INTO tenants (id, name, address, postal_code, city, kontakt_email, kontakt_telefon, entsorgernummer)
+      INSERT OR IGNORE INTO tenants (id, name, address, postal_code, city, kontakt_email, kontakt_telefon, entsorgernummer)
       VALUES (?, 'Musterbetrieb GmbH', 'Industriestraße 1', '12345', 'Musterstadt', 'kontakt@musterbetrieb.de', '0123-456789', 'DE-12345-Z')
     `).run(tenantId);
 
     const userId = nanoid();
     const userHash = bcrypt.hashSync('kunde123', 10);
     database.prepare(`
-      INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role)
+      INSERT OR IGNORE INTO users (id, tenant_id, email, password_hash, first_name, last_name, role)
       VALUES (?, ?, 'max@musterbetrieb.de', ?, 'Max', 'Mustermann', 'tenant_admin')
     `).run(userId, tenantId, userHash);
 
@@ -173,17 +185,19 @@ function migrate(database: Database.Database) {
 
     for (const e of entries) {
       database.prepare(`
-        INSERT INTO abfall_eintraege (id, tenant_id, avv_code, bezeichnung, menge, einheit, erzeugungsdatum, entsorgungsweg, entsorger_name, status, created_by)
+        INSERT OR IGNORE INTO abfall_eintraege (id, tenant_id, avv_code, bezeichnung, menge, einheit, erzeugungsdatum, entsorgungsweg, entsorger_name, status, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(nanoid(), tenantId, e.avv, e.bez, e.menge, e.einheit, e.datum, e.weg, e.entsorger, e.status, userId);
     }
-  }
+  });
+
+  seed();
 }
 
 // ─── Tenant queries ────────────────────────────────────────────────────────────
 
 export function getAllTenants() {
-  return db.prepare(`
+  return db().prepare(`
     SELECT t.*,
       (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) as user_count,
       (SELECT COUNT(*) FROM abfall_eintraege a WHERE a.tenant_id = t.id) as entry_count
@@ -192,12 +206,12 @@ export function getAllTenants() {
 }
 
 export function getTenantById(id: string) {
-  return db.prepare(`SELECT * FROM tenants WHERE id = ?`).get(id) as Tenant | undefined;
+  return db().prepare(`SELECT * FROM tenants WHERE id = ?`).get(id) as Tenant | undefined;
 }
 
 export function createTenant(data: { name: string; address?: string; postal_code?: string; city?: string; kontakt_email?: string; kontakt_telefon?: string; entsorgernummer?: string; vat_id?: string }) {
   const id = nanoid();
-  db.prepare(`
+  db().prepare(`
     INSERT INTO tenants (id, name, address, postal_code, city, kontakt_email, kontakt_telefon, entsorgernummer, vat_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, data.name, data.address || null, data.postal_code || null, data.city || null, data.kontakt_email || null, data.kontakt_telefon || null, data.entsorgernummer || null, data.vat_id || null);
@@ -205,7 +219,7 @@ export function createTenant(data: { name: string; address?: string; postal_code
 }
 
 export function updateTenant(id: string, data: Partial<Tenant>) {
-  db.prepare(`
+  db().prepare(`
     UPDATE tenants SET name=?, address=?, postal_code=?, city=?, kontakt_email=?, kontakt_telefon=?, entsorgernummer=?, vat_id=?, is_active=?, updated_at=datetime('now')
     WHERE id=?
   `).run(data.name, data.address, data.postal_code, data.city, data.kontakt_email, data.kontakt_telefon, data.entsorgernummer, data.vat_id, data.is_active ?? 1, id);
@@ -214,21 +228,21 @@ export function updateTenant(id: string, data: Partial<Tenant>) {
 // ─── User queries ──────────────────────────────────────────────────────────────
 
 export function getUserByEmail(email: string) {
-  return db.prepare(`SELECT * FROM users WHERE email = ? AND is_active = 1`).get(email) as User | undefined;
+  return db().prepare(`SELECT * FROM users WHERE email = ? AND is_active = 1`).get(email) as User | undefined;
 }
 
 export function getUserById(id: string) {
-  return db.prepare(`SELECT * FROM users WHERE id = ?`).get(id) as User | undefined;
+  return db().prepare(`SELECT * FROM users WHERE id = ?`).get(id) as User | undefined;
 }
 
 export function getUsersByTenant(tenantId: string) {
-  return db.prepare(`SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId) as User[];
+  return db().prepare(`SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at DESC`).all(tenantId) as User[];
 }
 
 export function createUser(data: { tenant_id: string | null; email: string; password: string; first_name: string; last_name: string; role: string }) {
   const id = nanoid();
   const hash = bcrypt.hashSync(data.password, 10);
-  db.prepare(`
+  db().prepare(`
     INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, data.tenant_id, data.email, hash, data.first_name, data.last_name, data.role);
@@ -236,7 +250,7 @@ export function createUser(data: { tenant_id: string | null; email: string; pass
 }
 
 export function updateUserLastLogin(id: string) {
-  db.prepare(`UPDATE users SET last_login = datetime('now') WHERE id = ?`).run(id);
+  db().prepare(`UPDATE users SET last_login = datetime('now') WHERE id = ?`).run(id);
 }
 
 // ─── Abfall queries ────────────────────────────────────────────────────────────
@@ -256,19 +270,19 @@ export function getAbfallEintraege(tenantId: string, filter: AbfallFilter = {}) 
   const where = conditions.join(' AND ');
   const offset = (page - 1) * limit;
 
-  const items = db.prepare(`SELECT * FROM abfall_eintraege WHERE ${where} ORDER BY erzeugungsdatum DESC LIMIT ? OFFSET ?`).all([...params, limit, offset]);
-  const total = (db.prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE ${where}`).get(params) as { cnt: number }).cnt;
+  const items = db().prepare(`SELECT * FROM abfall_eintraege WHERE ${where} ORDER BY erzeugungsdatum DESC LIMIT ? OFFSET ?`).all([...params, limit, offset]);
+  const total = (db().prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE ${where}`).get(params) as { cnt: number }).cnt;
 
   return { items, total, page, limit };
 }
 
 export function getAbfallEintragById(id: string, tenantId: string) {
-  return db.prepare(`SELECT * FROM abfall_eintraege WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as AbfallEintrag | undefined;
+  return db().prepare(`SELECT * FROM abfall_eintraege WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as AbfallEintrag | undefined;
 }
 
 export function createAbfallEintrag(tenantId: string, userId: string, data: Partial<AbfallEintrag>) {
   const id = nanoid();
-  db.prepare(`
+  db().prepare(`
     INSERT INTO abfall_eintraege (id, tenant_id, avv_code, bezeichnung, menge, einheit, erzeugungsdatum, erzeuger_standort, entsorgungsweg, entsorger_name, status, notizen, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, tenantId, data.avv_code, data.bezeichnung, data.menge, data.einheit || 'kg', data.erzeugungsdatum, data.erzeuger_standort || null, data.entsorgungsweg || null, data.entsorger_name || null, data.status || 'offen', data.notizen || null, userId);
@@ -276,14 +290,14 @@ export function createAbfallEintrag(tenantId: string, userId: string, data: Part
 }
 
 export function updateAbfallEintrag(id: string, tenantId: string, data: Partial<AbfallEintrag>) {
-  db.prepare(`
+  db().prepare(`
     UPDATE abfall_eintraege SET avv_code=?, bezeichnung=?, menge=?, einheit=?, erzeugungsdatum=?, erzeuger_standort=?, entsorgungsweg=?, entsorger_name=?, status=?, notizen=?, updated_at=datetime('now')
     WHERE id=? AND tenant_id=?
   `).run(data.avv_code, data.bezeichnung, data.menge, data.einheit, data.erzeugungsdatum, data.erzeuger_standort || null, data.entsorgungsweg || null, data.entsorger_name || null, data.status, data.notizen || null, id, tenantId);
 }
 
 export function deleteAbfallEintrag(id: string, tenantId: string) {
-  db.prepare(`UPDATE abfall_eintraege SET status='archiviert', updated_at=datetime('now') WHERE id=? AND tenant_id=?`).run(id, tenantId);
+  db().prepare(`UPDATE abfall_eintraege SET status='archiviert', updated_at=datetime('now') WHERE id=? AND tenant_id=?`).run(id, tenantId);
 }
 
 // ─── Entsorgungsnachweis queries ───────────────────────────────────────────────
@@ -298,19 +312,19 @@ export function getEntsorgungsnachweise(tenantId: string, filter: { status?: str
   const where = conditions.join(' AND ');
   const offset = (page - 1) * limit;
 
-  const items = db.prepare(`SELECT * FROM entsorgungsnachweise WHERE ${where} ORDER BY ausstellungsdatum DESC LIMIT ? OFFSET ?`).all([...params, limit, offset]);
-  const total = (db.prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE ${where}`).get(params) as { cnt: number }).cnt;
+  const items = db().prepare(`SELECT * FROM entsorgungsnachweise WHERE ${where} ORDER BY ausstellungsdatum DESC LIMIT ? OFFSET ?`).all([...params, limit, offset]);
+  const total = (db().prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE ${where}`).get(params) as { cnt: number }).cnt;
 
   return { items, total, page, limit };
 }
 
 export function getNachweisById(id: string, tenantId: string) {
-  return db.prepare(`SELECT * FROM entsorgungsnachweise WHERE id=? AND tenant_id=?`).get(id, tenantId) as Entsorgungsnachweis | undefined;
+  return db().prepare(`SELECT * FROM entsorgungsnachweise WHERE id=? AND tenant_id=?`).get(id, tenantId) as Entsorgungsnachweis | undefined;
 }
 
 export function createEntsorgungsnachweis(tenantId: string, userId: string, data: Partial<Entsorgungsnachweis>) {
   const id = nanoid();
-  db.prepare(`
+  db().prepare(`
     INSERT INTO entsorgungsnachweise (id, tenant_id, nachweis_nummer, nachweis_typ, avv_code, abfall_bezeichnung, menge, einheit, erzeuger_name, entsorger_name, entsorger_genehmigung, befoerderer_name, entsorgungsanlage, ausstellungsdatum, gueltig_bis, status, notizen, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, tenantId, data.nachweis_nummer, data.nachweis_typ || 'Entsorgungsnachweis', data.avv_code || null, data.abfall_bezeichnung, data.menge || null, data.einheit || null, data.erzeuger_name, data.entsorger_name, data.entsorger_genehmigung || null, data.befoerderer_name || null, data.entsorgungsanlage || null, data.ausstellungsdatum, data.gueltig_bis || null, data.status || 'aktiv', data.notizen || null, userId);
@@ -318,7 +332,7 @@ export function createEntsorgungsnachweis(tenantId: string, userId: string, data
 }
 
 export function updateEntsorgungsnachweis(id: string, tenantId: string, data: Partial<Entsorgungsnachweis>) {
-  db.prepare(`
+  db().prepare(`
     UPDATE entsorgungsnachweise SET nachweis_nummer=?, nachweis_typ=?, avv_code=?, abfall_bezeichnung=?, menge=?, einheit=?, erzeuger_name=?, entsorger_name=?, entsorger_genehmigung=?, befoerderer_name=?, entsorgungsanlage=?, ausstellungsdatum=?, gueltig_bis=?, status=?, notizen=?, updated_at=datetime('now')
     WHERE id=? AND tenant_id=?
   `).run(data.nachweis_nummer, data.nachweis_typ, data.avv_code || null, data.abfall_bezeichnung, data.menge || null, data.einheit || null, data.erzeuger_name, data.entsorger_name, data.entsorger_genehmigung || null, data.befoerderer_name || null, data.entsorgungsanlage || null, data.ausstellungsdatum, data.gueltig_bis || null, data.status, data.notizen || null, id, tenantId);
@@ -327,14 +341,14 @@ export function updateEntsorgungsnachweis(id: string, tenantId: string, data: Pa
 // ─── Dashboard stats ───────────────────────────────────────────────────────────
 
 export function getDashboardStats(tenantId: string) {
-  const total = (db.prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status != 'archiviert'`).get(tenantId) as { cnt: number }).cnt;
-  const offen = (db.prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status='offen'`).get(tenantId) as { cnt: number }).cnt;
-  const entsorgt = (db.prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status='entsorgt'`).get(tenantId) as { cnt: number }).cnt;
-  const gesamtMenge = (db.prepare(`SELECT COALESCE(SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END),0) as total FROM abfall_eintraege WHERE tenant_id=? AND status != 'archiviert'`).get(tenantId) as { total: number }).total;
-  const aktiveNachweise = (db.prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE tenant_id=? AND status='aktiv'`).get(tenantId) as { cnt: number }).cnt;
-  const ablaufendeNachweise = (db.prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE tenant_id=? AND status='aktiv' AND gueltig_bis BETWEEN date('now') AND date('now', '+60 days')`).get(tenantId) as { cnt: number }).cnt;
+  const total = (db().prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status != 'archiviert'`).get(tenantId) as { cnt: number }).cnt;
+  const offen = (db().prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status='offen'`).get(tenantId) as { cnt: number }).cnt;
+  const entsorgt = (db().prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege WHERE tenant_id=? AND status='entsorgt'`).get(tenantId) as { cnt: number }).cnt;
+  const gesamtMenge = (db().prepare(`SELECT COALESCE(SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END),0) as total FROM abfall_eintraege WHERE tenant_id=? AND status != 'archiviert'`).get(tenantId) as { total: number }).total;
+  const aktiveNachweise = (db().prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE tenant_id=? AND status='aktiv'`).get(tenantId) as { cnt: number }).cnt;
+  const ablaufendeNachweise = (db().prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise WHERE tenant_id=? AND status='aktiv' AND gueltig_bis BETWEEN date('now') AND date('now', '+60 days')`).get(tenantId) as { cnt: number }).cnt;
 
-  const monatlich = db.prepare(`
+  const monatlich = db().prepare(`
     SELECT strftime('%Y-%m', erzeugungsdatum) as monat,
            SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END) as menge_kg
     FROM abfall_eintraege WHERE tenant_id=? AND status != 'archiviert' AND erzeugungsdatum >= date('now', '-6 months')
@@ -345,11 +359,99 @@ export function getDashboardStats(tenantId: string) {
 }
 
 export function getAdminStats() {
-  const tenants = (db.prepare(`SELECT COUNT(*) as cnt FROM tenants WHERE is_active=1`).get() as { cnt: number }).cnt;
-  const users = (db.prepare(`SELECT COUNT(*) as cnt FROM users WHERE role != 'admin'`).get() as { cnt: number }).cnt;
-  const eintraege = (db.prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege`).get() as { cnt: number }).cnt;
-  const nachweise = (db.prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise`).get() as { cnt: number }).cnt;
+  const tenants = (db().prepare(`SELECT COUNT(*) as cnt FROM tenants WHERE is_active=1`).get() as { cnt: number }).cnt;
+  const users = (db().prepare(`SELECT COUNT(*) as cnt FROM users WHERE role != 'admin'`).get() as { cnt: number }).cnt;
+  const eintraege = (db().prepare(`SELECT COUNT(*) as cnt FROM abfall_eintraege`).get() as { cnt: number }).cnt;
+  const nachweise = (db().prepare(`SELECT COUNT(*) as cnt FROM entsorgungsnachweise`).get() as { cnt: number }).cnt;
   return { tenants, users, eintraege, nachweise };
+}
+
+// ─── Admin user queries ────────────────────────────────────────────────────────
+
+export function getAllUsersForAdmin() {
+  return db().prepare(`
+    SELECT u.*, t.name as tenant_name
+    FROM users u
+    LEFT JOIN tenants t ON t.id = u.tenant_id
+    ORDER BY u.created_at DESC
+  `).all() as (User & { tenant_name?: string })[];
+}
+
+export function deactivateUser(id: string) {
+  db().prepare(`UPDATE users SET is_active=0, updated_at=datetime('now') WHERE id=?`).run(id);
+}
+
+export function activateUser(id: string) {
+  db().prepare(`UPDATE users SET is_active=1, updated_at=datetime('now') WHERE id=?`).run(id);
+}
+
+export function updateUserProfile(id: string, data: { first_name: string; last_name: string; email: string }) {
+  db().prepare(`
+    UPDATE users SET first_name=?, last_name=?, email=?, updated_at=datetime('now') WHERE id=?
+  `).run(data.first_name, data.last_name, data.email, id);
+}
+
+export function updateUserPasswordHash(id: string, hash: string) {
+  db().prepare(`UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE id=?`).run(hash, id);
+}
+
+// ─── Report queries ────────────────────────────────────────────────────────────
+
+export function getReportData(tenantId: string, von?: string, bis?: string) {
+  const conditions: string[] = ['tenant_id = ?', "status != 'archiviert'"];
+  const params: unknown[] = [tenantId];
+
+  if (von) { conditions.push('erzeugungsdatum >= ?'); params.push(von); }
+  if (bis) { conditions.push('erzeugungsdatum <= ?'); params.push(bis); }
+
+  const where = conditions.join(' AND ');
+
+  const byAvv = db().prepare(`
+    SELECT avv_code, bezeichnung,
+           COUNT(*) as anzahl,
+           SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END) as menge_kg,
+           GROUP_CONCAT(DISTINCT status) as statusliste
+    FROM abfall_eintraege WHERE ${where}
+    GROUP BY avv_code ORDER BY menge_kg DESC
+  `).all(params) as { avv_code: string; bezeichnung: string; anzahl: number; menge_kg: number; statusliste: string }[];
+
+  const byStatus = db().prepare(`
+    SELECT status, COUNT(*) as anzahl,
+           SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END) as menge_kg
+    FROM abfall_eintraege WHERE ${where}
+    GROUP BY status
+  `).all(params) as { status: string; anzahl: number; menge_kg: number }[];
+
+  const byMonth = db().prepare(`
+    SELECT strftime('%Y-%m', erzeugungsdatum) as monat,
+           COUNT(*) as anzahl,
+           SUM(CASE WHEN einheit='t' THEN menge*1000 WHEN einheit='kg' THEN menge ELSE 0 END) as menge_kg
+    FROM abfall_eintraege WHERE ${where}
+    GROUP BY monat ORDER BY monat
+  `).all(params) as { monat: string; anzahl: number; menge_kg: number }[];
+
+  const rawEntries = db().prepare(`
+    SELECT * FROM abfall_eintraege WHERE ${where} ORDER BY erzeugungsdatum DESC
+  `).all(params) as AbfallEintrag[];
+
+  return { byAvv, byStatus, byMonth, rawEntries };
+}
+
+// ─── Audit log ─────────────────────────────────────────────────────────────────
+
+export function addAuditEntry(data: { tenant_id?: string; user_id: string; aktion: string; ressource: string; ressource_id?: string; details?: string }) {
+  const id = nanoid();
+  db().prepare(`
+    INSERT INTO audit_log (id, tenant_id, user_id, aktion, ressource, ressource_id, details)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, data.tenant_id || null, data.user_id, data.aktion, data.ressource, data.ressource_id || null, data.details || null);
+}
+
+export function getAuditLog(tenantId: string | null, limit = 50) {
+  if (tenantId) {
+    return db().prepare(`SELECT * FROM audit_log WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?`).all(tenantId, limit);
+  }
+  return db().prepare(`SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?`).all(limit);
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

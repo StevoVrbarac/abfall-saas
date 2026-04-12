@@ -2,6 +2,8 @@ import { headers } from 'next/headers';
 import { getDashboardStats, getTenantById } from '@/lib/db';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 function formatKg(kg: number): string {
   if (kg >= 1000) return `${(kg / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} t`;
   return `${kg.toLocaleString('de-DE')} kg`;
