@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ContactForm from './contact-form';
+import HeroPhoto from './hero-photo';
 
 export const metadata: Metadata = {
   title: 'Stevo Vrbarac – Berater & Interim Manager | Entsorgungswirtschaft',
@@ -32,37 +33,45 @@ export default function ProfilPage() {
       {/* ── Hero ── */}
       <section className="min-h-screen flex flex-col justify-center pt-16 px-6">
         <div className="max-w-5xl mx-auto w-full py-24">
-          <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-full px-4 py-1.5 mb-10">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-sm text-slate-500">Verfügbar für neue Mandate</span>
-          </div>
-          <h1 className="text-6xl sm:text-8xl font-bold leading-none tracking-tight mb-6">
-            Stevo<br />Vrbarac
-          </h1>
-          <p className="text-xl sm:text-2xl text-slate-400 font-light mb-5">
-            Interim Manager & Berater — Entsorgungswirtschaft
-          </p>
-          <p className="text-base sm:text-lg text-slate-500 max-w-2xl leading-relaxed mb-12">
-            10+ Jahre operative Führungserfahrung in der Entsorgungs- und Recyclingbranche.
-            Ich übernehme Verantwortung wo es zählt — von der Niederlassungsleitung mit
-            voller P&L-Verantwortung bis zur standortübergreifenden Restrukturierung.
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <a
-              href="#kontakt"
-              className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
-            >
-              Erstgespräch vereinbaren
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-              </svg>
-            </a>
-            <a
-              href="#leistungen"
-              className="inline-flex items-center gap-2 border border-slate-200 text-slate-700 px-6 py-3 rounded-lg text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-colors"
-            >
-              Meine Leistungen
-            </a>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Text */}
+            <div>
+              <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-full px-4 py-1.5 mb-10">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span className="text-sm text-slate-500">Verfügbar für neue Mandate</span>
+              </div>
+              <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tight mb-6">
+                Stevo<br />Vrbarac
+              </h1>
+              <p className="text-xl sm:text-2xl text-slate-400 font-light mb-5">
+                Interim Manager & Berater — Entsorgungswirtschaft
+              </p>
+              <p className="text-base text-slate-500 leading-relaxed mb-12">
+                10+ Jahre operative Führungserfahrung in der Entsorgungs- und Recyclingbranche.
+                Ich übernehme Verantwortung wo es zählt — von der Niederlassungsleitung mit
+                voller P&L-Verantwortung bis zur standortübergreifenden Restrukturierung.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <a
+                  href="#kontakt"
+                  className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
+                >
+                  Erstgespräch vereinbaren
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </a>
+                <a
+                  href="#leistungen"
+                  className="inline-flex items-center gap-2 border border-slate-200 text-slate-700 px-6 py-3 rounded-lg text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-colors"
+                >
+                  Meine Leistungen
+                </a>
+              </div>
+            </div>
+
+            {/* Photo */}
+            <HeroPhoto />
           </div>
         </div>
       </section>
