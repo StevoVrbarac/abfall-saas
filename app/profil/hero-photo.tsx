@@ -25,7 +25,7 @@ export default function HeroPhoto() {
           <img
             src="/profile.jpg"
             alt="Stevo Vrbarac"
-            className="w-full h-full object-cover object-top rounded-3xl"
+            className="w-full h-full object-cover object-center rounded-3xl"
             onError={() => setMissing(true)}
           />
         )}
