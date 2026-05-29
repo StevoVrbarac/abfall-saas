@@ -82,7 +82,7 @@ export default function ProfilPage() {
           <p className="text-xs font-semibold tracking-widest text-sky-500 uppercase mb-4">Über mich</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
             <div>
-              <h2 className="text-4xl font-bold mb-8 leading-tight text-slate-900">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-8 leading-tight text-slate-900">
                 Ergebnisverantwortung,<br />die wirklich greift.
               </h2>
               <div className="space-y-4 text-slate-600 leading-relaxed text-sm sm:text-base">
