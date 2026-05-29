@@ -35,7 +35,7 @@ export default function ContactForm() {
   }
 
   const inputClass =
-    'w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-colors';
+    'w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-400 transition-colors';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -54,7 +54,7 @@ export default function ContactForm() {
       <button
         type="submit"
         disabled={status === 'submitting'}
-        className="w-full bg-slate-900 text-white py-3 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-sky-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-sky-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {status === 'submitting' ? 'Wird gesendet…' : 'Nachricht senden'}
       </button>

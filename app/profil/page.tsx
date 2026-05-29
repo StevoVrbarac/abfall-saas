@@ -15,7 +15,7 @@ export default function ProfilPage() {
       {/* Navigation */}
       <nav className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="font-bold text-slate-900 text-lg tracking-tight">SV</span>
+          <span className="font-bold text-sky-600 text-lg tracking-tight">SV</span>
           <div className="hidden sm:flex items-center gap-8 text-sm text-slate-500">
             <a href="#ueber-mich" className="hover:text-slate-900 transition-colors">Über mich</a>
             <a href="#leistungen" className="hover:text-slate-900 transition-colors">Leistungen</a>
@@ -23,7 +23,7 @@ export default function ProfilPage() {
           </div>
           <a
             href="#kontakt"
-            className="text-sm font-medium bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors"
+            className="text-sm font-medium bg-sky-600 text-white px-4 py-2 rounded-lg hover:bg-sky-700 transition-colors"
           >
             Gespräch anfragen
           </a>
@@ -36,9 +36,9 @@ export default function ProfilPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Text */}
             <div>
-              <div className="inline-flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-full px-4 py-1.5 mb-10">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                <span className="text-sm text-slate-500">Verfügbar für neue Mandate</span>
+              <div className="inline-flex items-center gap-2 bg-sky-50 border border-sky-100 rounded-full px-4 py-1.5 mb-10">
+                <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
+                <span className="text-sm text-sky-700">Verfügbar für neue Mandate</span>
               </div>
               <h1 className="text-5xl sm:text-7xl font-bold leading-none tracking-tight mb-6">
                 Stevo<br />Vrbarac
@@ -54,7 +54,7 @@ export default function ProfilPage() {
               <div className="flex flex-wrap gap-4">
                 <a
                   href="#kontakt"
-                  className="inline-flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
+                  className="inline-flex items-center gap-2 bg-sky-600 text-white px-6 py-3 rounded-lg text-sm font-medium hover:bg-sky-700 transition-colors"
                 >
                   Erstgespräch vereinbaren
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,7 +79,7 @@ export default function ProfilPage() {
       {/* ── Über mich ── */}
       <section id="ueber-mich" className="py-28 bg-slate-50">
         <div className="max-w-5xl mx-auto px-6">
-          <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-4">Über mich</p>
+          <p className="text-xs font-semibold tracking-widest text-sky-500 uppercase mb-4">Über mich</p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
             <div>
               <h2 className="text-4xl font-bold mb-8 leading-tight text-slate-900">
@@ -108,7 +108,7 @@ export default function ProfilPage() {
             <div className="grid grid-cols-2 gap-4">
               {stats.map((stat) => (
                 <div key={stat.label} className="bg-white rounded-2xl p-6 border border-slate-100">
-                  <div className="text-3xl font-bold text-slate-900 mb-1">{stat.value}</div>
+                  <div className="text-3xl font-bold text-sky-600 mb-1">{stat.value}</div>
                   <div className="text-xs text-slate-400 leading-snug">{stat.label}</div>
                 </div>
               ))}
@@ -120,7 +120,7 @@ export default function ProfilPage() {
       {/* ── Leistungen ── */}
       <section id="leistungen" className="py-28">
         <div className="max-w-5xl mx-auto px-6">
-          <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-4">Leistungen</p>
+          <p className="text-xs font-semibold tracking-widest text-sky-500 uppercase mb-4">Leistungen</p>
           <h2 className="text-4xl font-bold mb-4 text-slate-900">Was ich für Sie tue.</h2>
           <p className="text-slate-500 mb-16 max-w-xl text-sm sm:text-base">
             Keine Theorie von außen — sondern echte operative Erfahrung aus vergleichbaren
@@ -132,7 +132,7 @@ export default function ProfilPage() {
                 key={service.title}
                 className="p-8 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/60 transition-all"
               >
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-6 text-xl">
+                <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center mb-6 text-xl">
                   {service.icon}
                 </div>
                 <h3 className="text-base font-semibold mb-3 text-slate-900">{service.title}</h3>
@@ -156,7 +156,7 @@ export default function ProfilPage() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             <div>
-              <p className="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-4">Kontakt</p>
+              <p className="text-xs font-semibold tracking-widest text-sky-500 uppercase mb-4">Kontakt</p>
               <h2 className="text-4xl font-bold mb-6 leading-tight text-slate-900">
                 Lassen Sie uns<br />sprechen.
               </h2>
